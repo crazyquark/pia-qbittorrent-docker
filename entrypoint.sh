@@ -42,6 +42,9 @@ exitIfNotIn(){
 # link the lib for qbittorrent for alpine
 export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:${LD_LIBRARY_PATH}
 
+# convert vpn to lower case for dir
+server=$(echo "$REGION" | tr '[:upper:]' '[:lower:]')
+
 printf " =========================================\n"
 printf " ============== qBittorrent ==============\n"
 printf " =================== + ===================\n"
@@ -60,10 +63,8 @@ printf " =========================================\n"
 ############################################
 exitIfUnset USER
 exitIfUnset PASSWORD
-exitIfNotIn ENCRYPTION "normal,strong"
-exitIfNotIn PROTOCOL "tcp,udp"
-cat "/openvpn/$PROTOCOL-$ENCRYPTION/$REGION.ovpn" &> /dev/null
-exitOnError $? "/openvpn/$PROTOCOL-$ENCRYPTION/$REGION.ovpn is not accessible"
+cat "/openvpn/nextgen/$server.ovpn" &> /dev/null
+exitOnError $? "/openvpn/nextgen/$server.ovpn is not accessible"
 if [ -z $WEBUI_PORT ]; then
   WEBUI_PORT=8888
 fi
@@ -83,9 +84,7 @@ fi
 ############################################
 printf "\n"
 printf "OpenVPN parameters:\n"
-printf " * Region: $REGION\n"
-printf " * Encryption: $ENCRYPTION\n"
-printf " * Protocol: $PROTOCOL\n"
+printf " * Region: $server\n"
 printf "Local network parameters:\n"
 printf " * Web UI port: $WEBUI_PORT\n"
 printf " * Adding PIA DNS Servers\n"
@@ -136,16 +135,16 @@ fi
 IP=$(ifconfig)
 printf "$ip"
 printf "[INFO] Reading OpenVPN configuration...\n"
-CONNECTIONSTRING=$(ack 'privateinternetaccess.com' "/openvpn/$PROTOCOL-$ENCRYPTION/$REGION.ovpn")
+CONNECTIONSTRING=$(ack 'privacy.network' "/openvpn/nextgen/$server.ovpn")
 exitOnError $?
 PORT=$(echo $CONNECTIONSTRING | cut -d' ' -f3)
 if [ "$PORT" = "" ]; then
-  printf "[ERROR] Port not found in /openvpn/$PROTOCOL-$ENCRYPTION/$REGION.ovpn\n"
+  printf "[ERROR] Port not found in /openvpn/nextgen/$server.ovpn\n"
   exit 1
 fi
 PIADOMAIN=$(echo $CONNECTIONSTRING | cut -d' ' -f2)
 if [ "$PIADOMAIN" = "" ]; then
-  printf "[ERROR] Domain not found in /openvpn/$PROTOCOL-$ENCRYPTION/$REGION.ovpn\n"
+  printf "[ERROR] Domain not found in /openvpn/nextgen/$server.ovpn\n"
   exit 1
 fi
 printf " * Port: $PORT\n"
@@ -154,7 +153,7 @@ printf "[INFO] Detecting IP addresses corresponding to $PIADOMAIN...\n"
 VPNIPS=$(dig $PIADOMAIN +short | grep '^[.0-9]*$')
 exitOnError $?
 if [ "$VPNIPS" = "" ]; then
-  print " Unable to connect to $PIADOMAIN"
+  printf " Unable to connect to $PIADOMAIN"
   exit 3
 fi
 for ip in $VPNIPS; do
@@ -167,13 +166,13 @@ done
 TARGET_PATH="/openvpn/target"
 printf "[INFO] Creating target OpenVPN files in $TARGET_PATH..."
 rm -rf $TARGET_PATH/*
-cd "/openvpn/$PROTOCOL-$ENCRYPTION"
+cd "/openvpn/nextgen"
 cp -f *.crt "$TARGET_PATH"
 exitOnError $? "Cannot copy crt file to $TARGET_PATH"
 cp -f *.pem "$TARGET_PATH"
 exitOnError $? "Cannot copy pem file to $TARGET_PATH"
-cp -f "$REGION.ovpn" "$TARGET_PATH/config.ovpn"
-exitOnError $? "Cannot copy $REGION.ovpn file to $TARGET_PATH"
+cp -f "$server.ovpn" "$TARGET_PATH/config.ovpn"
+exitOnError $? "Cannot copy $server.ovpn file to $TARGET_PATH"
 sed -i "/$CONNECTIONSTRING/d" "$TARGET_PATH/config.ovpn"
 exitOnError $? "Cannot delete '$CONNECTIONSTRING' from $TARGET_PATH/config.ovpn"
 sed -i '/resolv-retry/d' "$TARGET_PATH/config.ovpn"
@@ -287,8 +286,8 @@ printf "DONE\n"
 
 printf " * Creating VPN rules\n"
 for ip in $VPNIPS; do
-  printf "   * Accept output traffic to VPN server $ip through $INTERFACE, port $PROTOCOL $PORT..."
-  iptables -A OUTPUT -d $ip -o $INTERFACE -p $PROTOCOL -m $PROTOCOL --dport $PORT -j ACCEPT
+  printf "   * Accept output traffic to VPN server $ip through $INTERFACE, port udp $PORT..."
+  iptables -A OUTPUT -d $ip -o $INTERFACE -p udp -m udp --dport $PORT -j ACCEPT
   exitOnError $?
   printf "DONE\n"
 done
